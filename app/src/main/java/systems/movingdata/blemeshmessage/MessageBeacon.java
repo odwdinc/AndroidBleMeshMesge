@@ -26,9 +26,11 @@ class MessageBeacon {
     public static final ParcelUuid UUID_Message =  ParcelUuid.fromString("0003cbb1-0000-1000-8000-00805f9b0131");
     public static final ParcelUuid UUID_Message_Count =  ParcelUuid.fromString("0003cbb2-0001-0008-0000-0805f9b01310");
     public String mName;
-    public String CurrentMsg;
+    public String CurrentMsg = null;
+    public int CurrentMsg_Count = 0;
     //Device metadata
     public int mSignal;
+    public int Count = 0;
     public String mAddress;
     private static final String TAG = "BLEDevice";
     MainActivity fthis;
@@ -49,6 +51,7 @@ class MessageBeacon {
             if (fthis.mConnGatt != null) {
                 // re-connect and re-discover Services
                 fthis.mConnGatt.connect();
+                Count =0;
                 fthis.mConnGatt.discoverServices();
             } else {
                 Log.e(TAG, "state error");
@@ -86,6 +89,7 @@ class MessageBeacon {
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status,
                                             int newState) {
+            Count =0;
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 fthis.mStatus = newState;
                 fthis.mConnGatt.discoverServices();
@@ -97,12 +101,16 @@ class MessageBeacon {
 
         @Override
         public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+            Count =0;
             for (BluetoothGattService service : gatt.getServices()) {
+
                 if ((service == null) || (service.getUuid() == null)) {
                     continue;
+
                 }
                 if (MessageBeacon.SERVICE.toString().equalsIgnoreCase(service.getUuid().toString())) {
-                    fthis.mConnGatt.readCharacteristic(service.getCharacteristic(UUID.fromString(MessageBeacon.UUID_Message.toString())));
+                    fthis.mConnGatt.readCharacteristic(service.getCharacteristic(UUID.fromString(UUID_Message.toString())));
+                    //fthis.mConnGatt.readCharacteristic(service.getCharacteristic(UUID.fromString(UUID_Message_Count.toString())));
                 }
             }
         }
@@ -110,10 +118,11 @@ class MessageBeacon {
         @Override
         public void onCharacteristicRead (BluetoothGatt gatt, BluetoothGattCharacteristic
                 characteristic,int status){
+            Count =0;
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 if (MessageBeacon.UUID_Message.toString().equalsIgnoreCase(characteristic.getUuid().toString())) {
                     final String name = characteristic.getStringValue(0);
-                    Log.d(TAG, "onBatchScanResults: "+name);
+                    Log.d(TAG, "CurrentMsg: "+name);
                     fthis.runOnUiThread(new Runnable() {
                         public void run() {
                             CurrentMsg= name;
@@ -121,8 +130,14 @@ class MessageBeacon {
                         }
                     });
                 } else if (MessageBeacon.UUID_Message_Count.toString().equalsIgnoreCase(characteristic.getUuid().toString())) {
-                    final String name = characteristic.getStringValue(0);
-                    Log.d(TAG, "onBatchScanResults: "+name);
+                    final int name = characteristic.getIntValue(characteristic.FORMAT_UINT8,0);
+                    fthis.runOnUiThread(new Runnable() {
+                        public void run() {
+                            CurrentMsg_Count= name;
+                            fthis.mHandler.sendMessage(Message.obtain(null, 0, MessageBeacon.this));
+                        }
+                    });
+                    Log.d(TAG, "CurrentMsg_Count: "+name);
                 }
 
             }

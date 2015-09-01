@@ -35,6 +35,7 @@ import android.widget.Toast;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 
 public class MainActivity extends Activity {
@@ -49,6 +50,7 @@ public class MainActivity extends Activity {
     public BeaconAdapter mAdapter;
     public BluetoothGatt mConnGatt = null;
     public int mStatus;
+    Handler customHandler;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -75,6 +77,10 @@ public class MainActivity extends Activity {
 
         mBeacons = new HashMap<String, MessageBeacon>();
         mStatus = BluetoothProfile.STATE_DISCONNECTED;
+
+        customHandler= new android.os.Handler();
+        customHandler.postDelayed(updateTimerThread, 0);
+
     }
 
     @Override
@@ -125,6 +131,45 @@ public class MainActivity extends Activity {
         stopScan();
     }
 
+
+    private Runnable updateTimerThread = new Runnable()
+    {
+        public void run()
+        {
+            //write here whaterver you want to repeat
+            runOnUiThread(new Runnable() {
+                public void run() {
+                    boolean flag = false;
+
+                    for(Map.Entry<String, MessageBeacon> entry : mBeacons.entrySet()) {
+                        String key = entry.getKey();
+                        MessageBeacon value = entry.getValue();
+                        if (value.Count > 10){
+                            mBeacons.remove(key);
+                            Log.d(TAG, "remove: " + key);
+                            flag = true;
+                        }else{
+                            Log.d(TAG, "Count: " + value.Count );
+                            value.Count = value.Count+1;
+                            mBeacons.put(key,value);
+                        }
+                        // do what you have to do here
+                        // In your case, an other loop.
+                    }
+                    if (flag) {
+                        Log.d(TAG, "flag: " + flag );
+                        mBeacons.clear();
+                        mAdapter.setNotifyOnChange(false);
+                        mAdapter.clear();
+                        mAdapter.addAll(mBeacons.values());
+                        mAdapter.notifyDataSetChanged();
+                    }
+                }
+            });
+
+            customHandler.postDelayed(this, 1000);
+        }
+    };
 
     private void startScan() {
         //Scan for devices advertising the thermometer service
@@ -180,7 +225,12 @@ public class MainActivity extends Activity {
              */
 
                 mStatus = BluetoothProfile.STATE_DISCONNECTED;
+                if(mBeacons.containsKey(result.getDevice().getAddress())){
 
+                    MessageBeacon beacon = mBeacons.get(result.getDevice().getAddress());
+                    beacon.Count =0;
+                    mBeacons.put(result.getDevice().getAddress(),beacon);
+                }
                 MessageBeacon beacon = new MessageBeacon(result.getScanRecord(),
                         result.getDevice().getAddress(),
                         result.getRssi(),result.getDevice(),MainActivity.this);
@@ -218,9 +268,10 @@ public class MainActivity extends Activity {
         @Override
         public void handleMessage(Message msg) {
             MessageBeacon beacon = (MessageBeacon) msg.obj;
-            MessageBeacon beaconcpy = (MessageBeacon) msg.obj;
-            mBeacons.put(beacon.getName(), beacon);
-            showNotification(beacon.getCurrentMsg());
+            beacon.Count = 0;
+            //MessageBeacon beaconcpy = (MessageBeacon) msg.obj;
+            mBeacons.put(beacon.getAddress(), beacon);
+            //showNotification(beacon.getCurrentMsg());
 
                     //mBeacons.put(beacon.getCurrentMsg(), beacon);
 
@@ -231,18 +282,19 @@ public class MainActivity extends Activity {
 
 
 
+            if(beacon.CurrentMsg != null) {
 
+                if (mConnGatt != null) {
+                    if ((mStatus != BluetoothProfile.STATE_DISCONNECTING)
+                            && (mStatus != BluetoothProfile.STATE_DISCONNECTED)) {
+                        mConnGatt.disconnect();
+                    }
+                    while (mStatus != BluetoothProfile.STATE_DISCONNECTED) {
 
-            if (mConnGatt != null) {
-                if ((mStatus != BluetoothProfile.STATE_DISCONNECTING)
-                        && (mStatus != BluetoothProfile.STATE_DISCONNECTED)) {
-                    mConnGatt.disconnect();
+                    }
+                    mConnGatt.close();
+                    mConnGatt = null;
                 }
-                while (mStatus != BluetoothProfile.STATE_DISCONNECTED){
-
-                }
-                mConnGatt.close();
-                mConnGatt = null;
             }
 
         }
